@@ -107,9 +107,20 @@ const AudioIcon = ({ enabled }: { enabled: boolean }) => (
 );
 
 /**
+ * Disconnect Icon Component
+ */
+const DisconnectIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 17l5-5-5-5" />
+    <path d="M15 12H3" />
+    <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+  </svg>
+);
+
+/**
  * PlaygroundPresenter component handles the UI rendering with context-provided state
  */
-const PlaygroundPresenter = () => {
+const PlaygroundPresenter = ({ onDisconnect }: { onDisconnect: () => void }) => {
   const { config } = useConfig();
   const { 
     // State - only keep essential camera/mic states
@@ -279,6 +290,19 @@ const PlaygroundPresenter = () => {
           >
             <AudioIcon enabled={!isAudioMuted} />
           </button>
+
+          <button
+            onClick={onDisconnect}
+            className="
+              p-3 rounded-xl transition-all duration-300 backdrop-blur-sm
+              bg-red-500/15 text-red-100 border border-red-300/25
+              hover:bg-red-500/25 hover:border-red-200/40 hover:scale-110
+              active:scale-95 active:bg-red-500/35
+            "
+            title="Disconnect room"
+          >
+            <DisconnectIcon />
+          </button>
         </div>
       </div>
     </div>
@@ -309,7 +333,7 @@ export default function Playground({
       voiceAssistant={voiceAssistant}
       roomState={roomState}
     >
-      <PlaygroundPresenter />
+      <PlaygroundPresenter onDisconnect={() => onConnect(false)} />
     </PlaygroundProvider>
   );
 }

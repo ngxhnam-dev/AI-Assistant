@@ -5,25 +5,109 @@ Usage:
     python agent.py start      # production worker
 """
 
+import asyncio
+import json
 import logging
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
+from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentSession,
     JobContext,
     RoomOutputOptions,
+    UserInputTranscribedEvent,
     WorkerOptions,
     WorkerType,
     cli,
 )
 from livekit.plugins import bithuman, openai, silero
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+
 logger = logging.getLogger("bithuman-agent")
 logger.setLevel(logging.INFO)
 
 load_dotenv()
+
+KEYWORD_ACTION_MAP = {
+    "hello": "mini_wave_hello",
+    "hi": "mini_wave_hello",
+    "hey": "mini_wave_hello",
+    "laugh": "laugh_react",
+    "funny": "laugh_react",
+    "joke": "laugh_react",
+    "yes": "talk_head_nod_subtle",
+    "correct": "talk_head_nod_subtle",
+    "agree": "talk_head_nod_subtle",
+    "congrats": "clap_cheer",
+    "congratulations": "clap_cheer",
+    "good job": "thumbs_up_pulse",
+    "nice": "thumbs_up_pulse",
+    "great": "thumbs_up_pulse",
+    "love": "heart_hands",
+    "heart": "heart_hands",
+    "bye": "blow_kiss_heart",
+    "goodbye": "blow_kiss_heart",
+}
+
+
+def get_avatar_identities(room: rtc.Room) -> list[str]:
+    return [
+        identity
+        for identity in room.remote_participants.keys()
+        if identity.startswith("bithuman-avatar")
+    ]
+
+
+async def trigger_dynamics(
+    local_participant: rtc.LocalParticipant,
+    destination_identity: str,
+    action: str,
+) -> None:
+    logger.info(
+        "Sending trigger_dynamics '%s' from '%s' to '%s'",
+        action,
+        local_participant.identity,
+        destination_identity,
+    )
+    await local_participant.perform_rpc(
+        destination_identity=destination_identity,
+        method="trigger_dynamics",
+        payload=json.dumps(
+            {
+                "action": action,
+                "identity": local_participant.identity,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        ),
+    )
+    logger.info("trigger_dynamics sent successfully: %s -> %s", action, destination_identity)
+
+
+def schedule_gesture(room: rtc.Room, action: str) -> None:
+    avatar_identities = get_avatar_identities(room)
+    if not avatar_identities:
+        logger.warning(
+            "No bitHuman avatar participant found for gesture '%s'. Remote identities: %s",
+            action,
+            list(room.remote_participants.keys()),
+        )
+        return
+
+    for identity in avatar_identities:
+        asyncio.create_task(
+            trigger_dynamics(
+                room.local_participant,
+                identity,
+                action,
+            )
+        )
 
 
 async def entrypoint(ctx: JobContext):
@@ -61,6 +145,22 @@ async def entrypoint(ctx: JobContext):
         room=ctx.room,
         room_output_options=RoomOutputOptions(audio_enabled=False),
     )
+
+    @session.on("user_input_transcribed")
+    def on_user_input_transcribed(event: UserInputTranscribedEvent):
+        if not event.is_final:
+            return
+
+        transcript = event.transcript.strip().lower()
+        logger.info("Final transcript received: %s", transcript)
+        if not transcript:
+            return
+
+        for keyword, action in KEYWORD_ACTION_MAP.items():
+            if keyword in transcript:
+                logger.info("Matched keyword '%s' -> action '%s'", keyword, action)
+                schedule_gesture(ctx.room, action)
+                break
 
 
 if __name__ == "__main__":
