@@ -1,0 +1,159 @@
+---
+title: "Quick Start: Real-Time Avatar API in 5 Minutes"
+description: "Install the bitHuman Python SDK, create your first talking avatar, and animate a face with audio — step by step."
+icon: "rocket"
+---
+
+## 1. Get Credentials
+
+<Steps>
+  <Step title="Sign up">
+    Create an account at [www.bithuman.ai](https://www.bithuman.ai)
+  </Step>
+  <Step title="Copy your API Secret">
+    Go to [Developer → API Keys](https://www.bithuman.ai/#developer) and copy your **API Secret**.
+
+    <img src="/images/example-api-secret.jpg" alt="API Keys" style={{ borderRadius: '8px' }} />
+  </Step>
+  <Step title="Download an avatar model">
+    Download an avatar model (`.imx` file) from the [Explore](https://www.bithuman.ai/#explore) page — click the **⋮** menu on any agent and select **Download**.
+
+    <img src="/images/example-download-button.jpg" alt="Download Model" style={{ borderRadius: '8px' }} />
+  </Step>
+</Steps>
+
+## 2. Install
+
+```bash
+pip install bithuman --upgrade
+```
+
+<Note>
+The SDK includes `opencv-python-headless` automatically. Do **not** install `opencv-python` (full) separately — it conflicts with PyAV and causes FFmpeg warnings on macOS.
+</Note>
+
+## 3. Run Your First Avatar
+
+You need a `.wav` audio file to drive the avatar. A sample `speech.wav` is included in each
+[example directory](https://github.com/bithuman-product/bithuman-examples), or generate your own with any TTS service.
+
+```python
+import asyncio
+import cv2
+from bithuman import AsyncBithuman
+from bithuman.audio import load_audio, float32_to_int16
+
+async def main():
+    # Initialize
+    runtime = await AsyncBithuman.create(
+        model_path="avatar.imx",
+        api_secret="your_api_secret"
+    )
+    await runtime.start()
+
+    # Load and push audio
+    audio, sr = load_audio("speech.wav")
+    await runtime.push_audio(
+        float32_to_int16(audio).tobytes(), sr
+    )
+    await runtime.flush()
+
+    # Display animated frames
+    async for frame in runtime.run():
+        if frame.has_image:
+            cv2.imshow("Avatar", frame.bgr_image)  # numpy (H, W, 3)
+            cv2.waitKey(1)
+
+asyncio.run(main())
+```
+
+[Full working example on GitHub](https://github.com/bithuman-product/bithuman-examples/tree/main/essence-selfhosted)
+
+---
+
+## Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Runtime** | `AsyncBithuman` instance that processes audio into video |
+| **push_audio** | Feed audio bytes — avatar lip-syncs in real-time |
+| **flush** | Signals end of audio input |
+| **run()** | Async generator that yields frames at 25 FPS |
+| **Frame** | Contains `.bgr_image` (numpy), `.audio_chunk`, `.end_of_speech` |
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ModuleNotFoundError: No module named 'bithuman'">
+    The SDK is not installed. Run:
+    ```bash
+    pip install bithuman --upgrade
+    ```
+    Make sure you're using the correct Python environment (virtualenv, conda, etc.).
+  </Accordion>
+
+  <Accordion title="Authentication failed / 401 error">
+    Your API secret is invalid or missing. Check:
+    1. You copied the full secret from [Developer → API Keys](https://www.bithuman.ai/#developer)
+    2. The `api_secret` parameter or `BITHUMAN_API_SECRET` env var is set correctly
+    3. Your account is active with available credits
+
+    Quick test:
+    ```bash
+    curl -X POST https://api.bithuman.ai/v1/validate \
+      -H "api-secret: YOUR_SECRET"
+    ```
+  </Accordion>
+
+  <Accordion title="Avatar shows but no lip movement">
+    The avatar needs audio input to animate:
+    1. Ensure you're calling `push_audio()` with valid audio data
+    2. Call `flush()` after pushing all audio
+    3. Check that the audio is 16-bit PCM format (use `float32_to_int16()` helper)
+    4. Verify audio sample rate matches the file (typically 16000 or 44100)
+  </Accordion>
+
+  <Accordion title="Slow startup (~20 seconds)">
+    This is normal for the first session — the `.imx` model takes time to load and initialize. Subsequent sessions in the same process start instantly.
+
+    To reduce perceived latency, keep the runtime alive between sessions instead of recreating it.
+  </Accordion>
+
+  <Accordion title="FileNotFoundError: avatar.imx not found">
+    The model file path is wrong. Check:
+    1. The `.imx` file exists at the path you specified
+    2. Use an absolute path if running from a different directory
+    3. Download a model from the [Explore](https://www.bithuman.ai/#explore) page if you don't have one
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Audio Clip" icon="play" href="/examples/audio-clip">
+    Play audio file through avatar (5 min)
+  </Card>
+  <Card title="Live Microphone" icon="microphone" href="/examples/microphone">
+    Real-time mic input (10 min)
+  </Card>
+  <Card title="AI Conversation" icon="comments" href="/examples/ai-conversation">
+    OpenAI voice chat (15 min)
+  </Card>
+</CardGroup>
+
+Or jump straight to the [Docker App](https://github.com/bithuman-product/bithuman-examples/tree/main/essence-selfhosted) for a complete end-to-end setup.
+
+### Guides
+
+- **[Prompt Guide](/getting-started/prompts)** — Master the CO-STAR framework for avatar personality
+- **[Media Guide](/getting-started/media-guide)** — Upload voice, image, and video assets
+- **[Animal Mode](/getting-started/animal-mode)** — Create animal avatars
+
+### System Requirements
+
+- Python 3.9+, 4+ CPU cores, 8GB RAM
+- macOS (M2+), Linux (x64/ARM64), or Windows (WSL)

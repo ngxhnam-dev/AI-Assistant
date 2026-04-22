@@ -1,0 +1,78 @@
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    # NODE_IP=127.0.0.1 makes WebRTC work on localhost and via SSH tunnel.
+    # For direct public access, set NODE_IP=<your_public_ip> in .env.
+    command: --config /etc/livekit.yaml --node-ip ${NODE_IP:-127.0.0.1}
+    restart: always
+    ports:
+      - "17880:17880"
+      - "17881:17881"
+      - "50700-50720:50700-50720/udp"
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml
+    networks:
+      - bh-network
+    depends_on:
+      redis:
+        condition: service_started
+
+  agent:
+    build:
+      context: .
+      dockerfile: agent.dockerfile
+    entrypoint: ["python", "agent.py", "start"]
+    restart: always
+    environment:
+      - BITHUMAN_API_SECRET=${BITHUMAN_API_SECRET}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_AGENT_NAME=${LIVEKIT_AGENT_NAME}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_VOICE=${OPENAI_VOICE:-coral}
+      - IMX_MODEL_ROOT=/imx-models
+      - BITHUMAN_ENABLE_LOCAL_VAD=${BITHUMAN_ENABLE_LOCAL_VAD:-0}
+      - LIVEKIT_NUM_IDLE_PROCESSES=${LIVEKIT_NUM_IDLE_PROCESSES:-0}
+      - AGENT_PROMPT=${AGENT_PROMPT:-}
+    volumes:
+      - ./models:/imx-models       # Mount your .imx model files here
+      - ./agent.py:/app/agent.py   # Live editing
+    networks:
+      - bh-network
+    depends_on:
+      livekit:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./nextjs-ui
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "4202:4202"
+    environment:
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - LIVEKIT_API_URL=${LIVEKIT_API_URL}
+      - LIVEKIT_WS_URL=${LIVEKIT_WS_URL}
+      - LIVEKIT_AGENT_NAME=${LIVEKIT_AGENT_NAME}
+      - NEXT_PUBLIC_LIVEKIT_URL=${NEXT_PUBLIC_LIVEKIT_URL}
+      - NEXT_PUBLIC_APP_CONFIG=${NEXT_PUBLIC_APP_CONFIG:-}
+      - BITHUMAN_AVATAR_IMAGE=${BITHUMAN_AVATAR_IMAGE:-}
+      - PORT=4202
+    networks:
+      - bh-network
+    depends_on:
+      livekit:
+        condition: service_started
+
+  redis:
+    image: redis:alpine
+    restart: always
+    networks:
+      - bh-network
+
+networks:
+  bh-network:
+    driver: bridge
