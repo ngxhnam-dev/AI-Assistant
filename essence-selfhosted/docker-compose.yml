@@ -35,6 +35,9 @@ services:
       - BITHUMAN_ENABLE_LOCAL_VAD=${BITHUMAN_ENABLE_LOCAL_VAD:-0}
       - LIVEKIT_NUM_IDLE_PROCESSES=${LIVEKIT_NUM_IDLE_PROCESSES:-0}
       - AGENT_PROMPT=${AGENT_PROMPT:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TRIGGER_GESTURE_ON_ANY_INPUT=${TRIGGER_GESTURE_ON_ANY_INPUT:-0}
+      - DEFAULT_GESTURE_ACTION=${DEFAULT_GESTURE_ACTION:-mini_wave_hello}
     volumes:
       - ./models:/imx-models       # Mount your .imx model files here
       - ./agent.py:/app/agent.py   # Live editing
