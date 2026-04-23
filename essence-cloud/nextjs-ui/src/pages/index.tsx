@@ -5,8 +5,7 @@ import { ToastProvider } from "@/components/toast/ToasterProvider";
 import { useToast } from "@/components/toast/ToasterProvider";
 import {
   LiveKitRoom,
-  RoomAudioRenderer,
-  StartAudio,
+  RoomAudioRenderer
 } from "@livekit/components-react";
 import { motion, AnimatePresence } from "framer-motion";
 import React, { useEffect, useState, useCallback, useRef } from "react";
@@ -89,7 +88,7 @@ export function HomeInner() {
   const showPlayground = Boolean(wsUrl && token);
 
   return (
-    <div className="bg-black flex flex-col w-full h-full relative overflow-hidden">
+    <div className="bg-white flex flex-col w-full h-full relative overflow-hidden">
       <AnimatePresence>
         {toastMessage && (
           <motion.div
@@ -136,12 +135,12 @@ export function HomeInner() {
             />
             <ConnectionStatusIndicator />
             <RoomAudioRenderer />
-            <StartAudio label="Click to enable audio playback" />
+            {/* <StartAudio label="Click to enable audio playback" /> */}
           </ConnectionManager>
         </LiveKitRoom>
       ) : (
         // Auto-connecting - no UI needed as Playground will show loading screen
-        <div className="w-full h-full bg-black"></div>
+        <div className="w-full h-full bg-white"></div>
       )}
     </div>
   );

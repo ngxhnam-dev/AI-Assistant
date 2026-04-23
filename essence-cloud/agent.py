@@ -18,7 +18,6 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     RoomOutputOptions,
-    UserInputTranscribedEvent,
     WorkerOptions,
     WorkerType,
     cli,
@@ -34,27 +33,6 @@ logger = logging.getLogger("bithuman-agent")
 logger.setLevel(logging.INFO)
 
 load_dotenv()
-
-KEYWORD_ACTION_MAP = {
-    "hello": "mini_wave_hello",
-    "hi": "mini_wave_hello",
-    "hey": "mini_wave_hello",
-    "laugh": "laugh_react",
-    "funny": "laugh_react",
-    "joke": "laugh_react",
-    "yes": "talk_head_nod_subtle",
-    "correct": "talk_head_nod_subtle",
-    "agree": "talk_head_nod_subtle",
-    "congrats": "clap_cheer",
-    "congratulations": "clap_cheer",
-    "good job": "thumbs_up_pulse",
-    "nice": "thumbs_up_pulse",
-    "great": "thumbs_up_pulse",
-    "love": "heart_hands",
-    "heart": "heart_hands",
-    "bye": "blow_kiss_heart",
-    "goodbye": "blow_kiss_heart",
-}
 
 
 def get_avatar_identities(room: rtc.Room) -> list[str]:
@@ -145,23 +123,6 @@ async def entrypoint(ctx: JobContext):
         room=ctx.room,
         room_output_options=RoomOutputOptions(audio_enabled=False),
     )
-
-    @session.on("user_input_transcribed")
-    def on_user_input_transcribed(event: UserInputTranscribedEvent):
-        if not event.is_final:
-            return
-
-        transcript = event.transcript.strip().lower()
-        logger.info("Final transcript received: %s", transcript)
-        if not transcript:
-            return
-
-        for keyword, action in KEYWORD_ACTION_MAP.items():
-            if keyword in transcript:
-                logger.info("Matched keyword '%s' -> action '%s'", keyword, action)
-                schedule_gesture(ctx.room, action)
-                break
-
 
 if __name__ == "__main__":
     cli.run_app(
