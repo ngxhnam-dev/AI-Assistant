@@ -74,19 +74,23 @@ All configuration is via `.env`. See `.env.example` for all options.
 | `BITHUMAN_API_SECRET` | Yes | API secret from bithuman.ai |
 | `BITHUMAN_AGENT_ID` | Yes | Agent code (e.g. `A78WKV4515`) |
 | `OPENAI_API_KEY` | Yes | For AI conversation |
-| `OPENAI_VOICE` | No | TTS voice, default `coral` |
-| `AGENT_PROMPT` | No | AI persona / system prompt (see [Customization](#customization)) |
-
+| `ELEVENLABS_API_KEY` | No | ElevenLabs API key for TTS; when unset, agent falls back to OpenAI TTS |
+| `ELEVENLABS_VOICE_ID` | No | ElevenLabs voice ID; when unset, agent falls back to OpenAI TTS |
+| `ELEVENLABS_MODEL_ID` | No | ElevenLabs model, default `eleven_flash_v2_5` |
+| `ELEVENLABS_LANGUAGE_CODE` | No | ElevenLabs language code, default `vi` |
+| `ELEVENLABS_OUTPUT_FORMAT` | No | ElevenLabs output format, default `pcm_16000` |
 ## Customization
 
-Edit `.env` to change the avatar's personality or voice:
+Edit `.env` to change the avatar's voice:
 
 ```bash
-# AI persona -- controls how the avatar responds
-AGENT_PROMPT="You are a friendly tech support agent. Help users troubleshoot issues step by step."
+# ElevenLabs voice ID
+ELEVENLABS_VOICE_ID=your_voice_id_here
 
-# Voice -- OpenAI TTS voice (options: alloy, ash, ballad, coral, echo, fable, onyx, nova, sage, shimmer, verse)
-OPENAI_VOICE=sage
+# Optional model / format tweaks
+ELEVENLABS_MODEL_ID=eleven_flash_v2_5
+ELEVENLABS_LANGUAGE_CODE=vi
+ELEVENLABS_OUTPUT_FORMAT=pcm_16000
 ```
 
 After changing `.env`, restart the agent:
@@ -94,7 +98,7 @@ After changing `.env`, restart the agent:
 docker compose restart agent
 ```
 
-If left unset, `AGENT_PROMPT` defaults to `"You are a helpful assistant. Respond concisely."` and `OPENAI_VOICE` defaults to `coral`.
+If left unset, `ELEVENLABS_MODEL_ID` defaults to `eleven_flash_v2_5`, `ELEVENLABS_LANGUAGE_CODE` defaults to `vi`, and `ELEVENLABS_OUTPUT_FORMAT` defaults to `pcm_16000`.
 
 ## Deployment Scenarios
 

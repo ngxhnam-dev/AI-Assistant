@@ -45,7 +45,7 @@ export default async function handleToken(
     const at = new AccessToken(apiKey, apiSecret, {
       identity,
       name: identity,
-      ttl: 3600,
+      ttl: 60,
     });
 
     at.addGrant(grant);

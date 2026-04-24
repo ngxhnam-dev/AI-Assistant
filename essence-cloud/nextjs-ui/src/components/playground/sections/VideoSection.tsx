@@ -58,7 +58,7 @@ export const VideoSection = ({
   }
 
   return (
-    <div className="flex flex-col w-full h-full grow text-gray-950 bg-black rounded-md relative">
+    <div className="flex flex-col w-full h-full grow text-gray-950 bg-white rounded-md relative">
       {content}
     </div>
   );

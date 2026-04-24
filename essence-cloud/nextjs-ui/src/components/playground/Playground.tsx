@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ControlsWindow, { ControlsLauncherIcon, GestureAction } from './ControlsWindow';
 import { VideoSection } from './sections/VideoSection';
 import { PlaygroundProvider, usePlayground } from '@/contexts/PlaygroundContext';
@@ -9,45 +9,22 @@ import {
   useLocalParticipant, 
   useConnectionState, 
   useRoomContext,
-  useTrackTranscription,
   useVoiceAssistant, 
   useTracks,
 } from '@livekit/components-react';
-import { ConnectionState, Track } from 'livekit-client';
+import { ConnectionState, RoomEvent, Track } from 'livekit-client';
 
 interface ChatMessage {
   id: string;
   role: 'assistant' | 'user';
   content: string;
+  timestamp: number;
 }
 
 interface MicrophoneOption {
   deviceId: string;
   label: string;
 }
-
-type TimelineMessage = ChatMessage & {
-  sortKey: number;
-};
-
-const toEpochMs = (value: unknown): number => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (value instanceof Date) {
-    return value.getTime();
-  }
-
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  return 0;
-};
 
 /**
  * Props for the Playground component
@@ -203,13 +180,12 @@ const PlaygroundPresenter = ({ onDisconnect }: { onDisconnect: () => void }) => 
   const [isLoading, setIsLoading] = useState(true);
   
   // Get voice assistant state and audio track for visualizer
-  const { state: agentState, audioTrack: agentAudioTrack, agentTranscriptions = [] } = voiceAssistant;
+  const { state: agentState, audioTrack: agentAudioTrack } = voiceAssistant;
   
   // Get video tracks using the useTracks hook
   const localTracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
-      { source: Track.Source.Microphone, withPlaceholder: true },
     ],
     { onlySubscribed: false }
   );
@@ -217,71 +193,78 @@ const PlaygroundPresenter = ({ onDisconnect }: { onDisconnect: () => void }) => 
   const localVideoTrack = localTracks.find(
     track => track.source === Track.Source.Camera
   );
-  const localAudioTrack = localTracks.find(
-    track => track.source === Track.Source.Microphone
-  );
-  const { segments: userTranscriptions } = useTrackTranscription(localAudioTrack, {
-    bufferSize: 50,
-  });
-  const messages = useMemo<ChatMessage[]>(() => {
-    const userTurnMap = new Map<string, TimelineMessage>();
-    userTranscriptions
-      .filter((item) => item.final && item.text?.trim())
-      .forEach((item) => {
-        const turnKey = `user-turn-${item.firstReceivedTime ?? item.lastReceivedTime ?? item.id}`;
-        const nextMessage: TimelineMessage = {
-          id: `user-${item.id}`,
-          role: 'user',
-          content: item.text.trim(),
-          sortKey: item.lastReceivedTime ?? item.firstReceivedTime ?? 0,
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  useEffect(() => {
+    if (!room) {
+      return;
+    }
+
+    const handleTurnHistory = (
+      payload: Uint8Array,
+      _participant?: unknown,
+      _kind?: unknown,
+      topic?: string,
+    ) => {
+      if (topic && topic !== 'turn_history') {
+        return;
+      }
+
+      const text = new TextDecoder().decode(payload);
+
+      try {
+        const parsed = JSON.parse(text) as {
+          type?: string;
+          order?: number;
+          role?: 'assistant' | 'user';
+          content?: string;
         };
-        const existing = userTurnMap.get(turnKey);
-        if (
-          !existing ||
-          nextMessage.sortKey >= existing.sortKey ||
-          nextMessage.content.length >= existing.content.length
-        ) {
-          userTurnMap.set(turnKey, nextMessage);
+
+        const role = parsed.role;
+        const content = parsed.content;
+
+        if (parsed.type !== 'turn_history' || !role || !content) {
+          return;
         }
-      });
-    const userMessages = Array.from(userTurnMap.values());
 
-    const assistantTurnMap = new Map<string, TimelineMessage>();
-    agentTranscriptions
-      .filter((item) => item.text?.trim())
-      .filter((item) => item.streamInfo?.attributes?.['lk.transcription_final'] !== 'false')
-      .forEach((item) => {
-        const turnKey =
-          item.streamInfo?.id ??
-          `assistant-turn-${item.participantIdentity}-${item.streamInfo?.timestamp ?? item.text}`;
-        const nextMessage: TimelineMessage = {
-          id: item.streamInfo?.id ?? `assistant-${item.participantIdentity}-${item.text}`,
-          role: item.participantIdentity === localParticipant?.identity ? 'user' : 'assistant',
-          content: item.text.trim(),
-          sortKey: toEpochMs(item.streamInfo?.timestamp),
-        };
-        const existing = assistantTurnMap.get(turnKey);
-        if (
-          !existing ||
-          nextMessage.sortKey >= existing.sortKey ||
-          nextMessage.content.length >= existing.content.length
-        ) {
-          assistantTurnMap.set(turnKey, nextMessage);
-        }
-      });
-    const assistantMessages = Array.from(assistantTurnMap.values());
+        setMessages((current) => {
+          if (current.some((message) => message.id === `${role}-${parsed.order}`)) {
+            return current;
+          }
 
-    const dedupedMessages = Array.from(
-      new Map(
-        [...userMessages, ...assistantMessages].map((message) => [message.id, message])
-      ).values()
-    );
+          return [
+            ...current,
+            {
+              id: `${role}-${parsed.order}`,
+              role,
+              content,
+              timestamp: parsed.order ?? current.length + 1,
+            },
+          ].sort((a, b) => a.timestamp - b.timestamp);
+        });
+      } catch (error) {
+        console.error('[playground] Failed to parse turn history packet', error, text);
+      }
+    };
 
-    return dedupedMessages
-      .sort((a, b) => a.sortKey - b.sortKey)
-      .map(({ id, role, content }) => ({ id, role, content }));
-  }, [agentTranscriptions, localParticipant?.identity, userTranscriptions]);
+    room.on(RoomEvent.DataReceived, handleTurnHistory);
+    return () => {
+      room.off(RoomEvent.DataReceived, handleTurnHistory);
+    };
+  }, [room]);
 
+  useEffect(() => {
+    if (roomState === ConnectionState.Disconnected) {
+      setMessages([]);
+    }
+  }, [roomState]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('messages for UI render', messages);
+    }
+  }, [messages]);
+  //console.log('messages for UI render', messages);
   // Handle loading progress
   useEffect(() => {
     if (roomState === ConnectionState.Connected) {
@@ -335,14 +318,14 @@ const PlaygroundPresenter = ({ onDisconnect }: { onDisconnect: () => void }) => 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
       <div className="relative h-full max-h-[100dvh] w-full max-w-[calc(100dvh*9/16)] overflow-hidden ">
-        <div className="relative z-10 flex h-full flex-col gap-4 px-5 pb-28 pt-20">
-          <div className="h-[40%]">
+        <div className="relative z-10 h-full pt-10">
+          <div className="h-[20%]">
           <h1>Tag line here</h1>
           </div>
 
-          <div className="grid h-[60%] min-h-0 grid-cols-[6fr_4fr] gap-4">
-            <section className="flex min-h-0">
-              <div className="relative h-full w-full overflow-hidden bg-transparent">
+          <div className="h-[80%] min-h-0 relative">
+            <section className="absolute min-h-0 w-4/5 h-full right-0 left-[-20%] bottom-[-6%]">
+              <div className="relative h-full w-full overflow-hidden bg-white">
                 <VideoSection
                   roomState={roomState}
                   agentVideoTrack={voiceAssistant?.videoTrack}
@@ -356,12 +339,12 @@ const PlaygroundPresenter = ({ onDisconnect }: { onDisconnect: () => void }) => 
               </div>
             </section>
 
-            <section className="min-h-0 flex items-center overflow-hidden">
-              <div className="flex w-full h-3/5 flex-col justify-end bg-[#007dff42] gap-3 px-3 py-16 rounded-[60px] overflow-y-auto ">
+            <section className="min-h-0 flex items-center overflow-hidden absolute top-[10%] bottom-[12%] right-[3%] w-1/2">
+              <div className="flex w-full h-3/5 flex-col justify-end bg-[#007dff42] gap-4 px-3 py-16 rounded-[20px] overflow-y-auto ">
                 {messages.map((message) => (
                   <article
                     key={message.id}
-                    className={`max-w-[94%] rounded-[1.5rem] border px-4 py-3 shadow-lg ${
+                    className={`max-w-[90%] rounded-[1.5rem] border px-4 py-3 shadow-lg ${
                       message.role === 'assistant'
                         ? 'mr-6 border-cyan-300/15 bg-cyan-300/10 text-white backdrop-blur-lg'
                         : 'ml-6 self-end border-white/10 bg-black/20 text-white/90 backdrop-blur-lg'
