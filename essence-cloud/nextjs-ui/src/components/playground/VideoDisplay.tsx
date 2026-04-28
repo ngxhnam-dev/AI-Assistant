@@ -36,7 +36,7 @@ export const VideoDisplay = ({
         <div className="absolute inset-0" ref={agentVideoRef}>
           <VideoTrack
             trackRef={agentVideoTrack}
-            className={`w-full h-full ${fitClass}`}
+            className={`w-full h-full ${fitClass} brightness-[1.025]`}
           />
         </div>
       )}
@@ -46,7 +46,7 @@ export const VideoDisplay = ({
         <div className="absolute top-4 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden border-2 border-white/20">
           <VideoTrack
             trackRef={localVideoTrack}
-            className="w-full h-full !object-cover"
+            className="w-full h-full !object-cover brightness-[1.025]"
           />
         </div>
       )}

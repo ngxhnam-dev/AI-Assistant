@@ -324,7 +324,7 @@ const PlaygroundPresenter = ({ onDisconnect }: { onDisconnect: () => void }) => 
           </div>
 
           <div className="h-[80%] min-h-0 relative">
-            <section className="absolute min-h-0 w-4/5 h-full right-0 left-[-20%] bottom-[-6%]">
+            <section className="absolute min-h-0 w-[90%] h-full right-0 left-[-20%] bottom-[0]">
               <div className="relative h-full w-full overflow-hidden bg-white">
                 <VideoSection
                   roomState={roomState}
